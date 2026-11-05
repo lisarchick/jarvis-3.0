@@ -102,12 +102,22 @@ fn replace_number_words(t: &str) -> String {
 
 // ------------------------------------------------------------------ wake word / стоп
 
-/// Учитывает частые ошибки распознавания: жарвис, джервис, чарвис, гарвис…
-pub static WAKE_RE: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"(?:^|\s)(?:д?ж|ч|ш|г|д)[аеэиоя]р[вб][иеы](?:[сзш]\S*)?(?=\s|$)|джарвис|джавис|джарви(?=\s|$)").unwrap()
+/// Wake word по одному слову: ловит и ошибки распознавания (жарвис, джервис,
+/// чарвис, гарвис, джарвиз…). Rust regex не поддерживает lookahead — поэтому
+/// проверяем пословно с анкерами.
+pub static WAKE_WORD_RE: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"^(?:д?ж|ч|ш|г|д)[аеэиоя]р[вб][иеы](?:[сзш]\w*)?$|^(?:д?ж[ае]в[иы][сзш]\w*)$|^(?:джарвис|джавис|джарви|жавис)$").unwrap()
 });
 
-pub static STOP_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"(?:^|\s)стоп(?:\s|$|!|\.|$)").unwrap());
+pub static STOP_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"(?u)\bстоп\b").unwrap());
+
+/// Есть ли wake word в фразе (пословно).
+pub fn has_wake_word(text: &str) -> bool {
+    text.to_lowercase().replace('ё', "е").split_whitespace().any(|w| {
+        let w = w.trim_matches(|c: char| !c.is_alphanumeric());
+        !w.is_empty() && WAKE_WORD_RE.is_match(w)
+    })
+}
 
 pub static NEW_SESSION_RE: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r"нов\w+\s+(?:сесси\w+|чат\w*|диалог\w*|разговор\w*)|начн\w+\s+(?:сначала|заново)").unwrap()
@@ -120,46 +130,54 @@ pub static GOODBYE_RE: Lazy<Regex> = Lazy::new(|| {
 /// Извлекает команду после wake word; None — если wake word нет.
 pub fn strip_wake(text: &str) -> Option<String> {
     let low = text.to_lowercase().replace('ё', "е");
-    if STOP_RE.is_match(&format!(" {} ", low)) {
+    if STOP_RE.is_match(&low) {
         return Some("__stop__".into());
     }
-    if let Some(m) = WAKE_RE.find(&low) {
-        let mut cmd = format!("{} {}", &low[..m.start()], &low[m.end()..]);
-        cmd = cmd.split_whitespace().collect::<Vec<_>>().join(" ");
-        cmd = cmd.trim_matches(|c: char| c == ' ' || c == ',' || c == '.' || c == '-' || c == '!').to_string();
-        if cmd.is_empty() {
-            return Some("__listen__".into());
+    let words: Vec<&str> = low.split_whitespace().collect();
+    for (i, w) in words.iter().enumerate() {
+        let clean = w.trim_matches(|c: char| !c.is_alphanumeric());
+        if !clean.is_empty() && WAKE_WORD_RE.is_match(clean) {
+            let mut cmd = words[..i].join(" ");
+            if !cmd.is_empty() {
+                cmd.push(' ');
+            }
+            cmd.push_str(&words[i + 1..].join(" "));
+            let cmd = cmd.trim_matches(|c: char| c == ' ' || c == ',' || c == '.' || c == '-' || c == '!').to_string();
+            if cmd.is_empty() {
+                return Some("__listen__".into());
+            }
+            return Some(cmd);
         }
-        return Some(cmd);
     }
     None
 }
 
 // ------------------------------------------------------------------ предложения для TTS
 
-static SENT_END_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"(?<=[.!?…])\s+|\n+").unwrap());
+// Rust regex не поддерживает lookbehind — пунктуацию оставляем в «голове» фразы.
+static SENT_END_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"([.!?…]+)\s+|\n+").unwrap());
 
 /// Режет накопленный текст на пригодные для озвучки предложения.
-/// Первое длинное предложение разбивается по запятой (ранний старт TTS).
+/// Граница: точка/!/?/… + пробел, либо перевод строки.
 pub fn split_sentences(buffer: &str, early: usize) -> Vec<String> {
     let mut out = Vec::new();
     let mut rest = buffer.to_string();
     loop {
-        let mut found: Option<(usize, usize)> = None;
-        for m in SENT_END_RE.find_iter(&rest) {
-            if !rest[..m.start()].trim().is_empty() {
-                found = Some((m.start(), m.end()));
-                break;
-            }
+        let Some(caps) = SENT_END_RE.captures(&rest) else { break };
+        let whole = caps.get(0).unwrap();
+        // Если группа пунктуации есть — голова кончается после неё.
+        let head_end = match caps.get(1) {
+            Some(punct) => whole.start() + punct.as_str().len(),
+            None => whole.start(),
+        };
+        if rest[..head_end].trim().is_empty() {
+            // пустая голова (например, \n в начале) — пропускаем разделитель
+            rest = rest[whole.end()..].to_string();
+            continue;
         }
-        match found {
-            Some((s, e)) => {
-                let head = rest[..s].to_string();
-                rest = rest[e..].to_string();
-                push_sentence(&mut out, &head, early);
-            }
-            None => break,
-        }
+        let head = rest[..head_end].to_string();
+        rest = rest[whole.end()..].to_string();
+        push_sentence(&mut out, &head, early);
     }
     if !rest.trim().is_empty() {
         push_sentence(&mut out, &rest, usize::MAX);
@@ -175,13 +193,19 @@ fn push_sentence(out: &mut Vec<String>, s: &str, _early: usize) {
 }
 
 /// Убирает markdown/HTML, чтобы не зачитывать «звёздочки» и теги.
+/// Содержимое инлайн-кода сохраняем — снимаем только бэктики.
 pub fn speakable(text: &str) -> String {
-    let mut s = text.to_string();
+    static CODE_SPAN: Lazy<Regex> = Lazy::new(|| Regex::new(r"`+([^`]*)`+").unwrap());
     static MD: Lazy<Regex> = Lazy::new(|| {
-        Regex::new(r"```[\s\S]*?```|`[^`]*`|!?\[[^\]]*\]\([^)]*\)|\*\*?|__?|^#{1,6}\s*|^\s*[-*+]\s+|^\s*\d+\.\s+|<[^>]+>").unwrap()
+        Regex::new(r"!?\[([^\]]*)\]\([^)]*\)|\*\*?|__?|^#{1,6}\s*|^\s*[-*+]\s+|^\s*\d+\.\s+|<[^>]+>").unwrap()
     });
-    s = MD.replace_all(&s, "").into_owned();
-    s = s.replace(['«', '»', '“', '”'], "").replace("  ", " ");
+    let s = CODE_SPAN.replace_all(text, "$1").into_owned();
+    // Текст ссылок сохраняем (группа 1), остальное сносим.
+    let mut s = MD.replace_all(&s, "$1").into_owned();
+    s = s.replace(['«', '»', '“', '”'], "");
+    while s.contains("  ") {
+        s = s.replace("  ", " ");
+    }
     s.trim().to_string()
 }
 
@@ -350,10 +374,17 @@ mod tests {
 
     #[test]
     fn sentences_split() {
-        let out = split_sentences("Маркони получил Нобелевскую премию в 1909 году. Вместе с Брауном. Подробности?",
- 100);
+        let out = split_sentences(
+            "Маркони получил Нобелевскую премию в 1909 году. Вместе с Брауном. Подробности?",
+            100,
+        );
         assert_eq!(out.len(), 3);
-        assert!(!out[0].contains('.'));
+        assert_eq!(out[0], "Маркони получил Нобелевскую премию в 1909 году.");
+        assert_eq!(out[1], "Вместе с Брауном.");
+        assert_eq!(out[2], "Подробности?");
+        // Переводы строк тоже режут.
+        let two = split_sentences("первая строка\nвторая строка", 100);
+        assert_eq!(two, vec!["первая строка".to_string(), "вторая строка".to_string()]);
     }
 
     #[test]

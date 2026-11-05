@@ -59,7 +59,7 @@ pub type LlmSpawn =
 /// покрывается интеграционным тестом с mock-LLM. Дельты текут в on_delta,
 /// готовые предложения — в on_sentence (ранняя озвучка).
 pub async fn tool_loop(
-    mut spawn_llm: &mut LlmSpawn,
+    spawn_llm: &mut LlmSpawn,
     mut messages: Vec<Message>,
     tools: Vec<ToolSpec>,
     execute_tool: &mut (dyn for<'t> FnMut(&'t ToolCall) -> BoxFuture<'t, (String, Vec<Value>)> + '_),
@@ -75,23 +75,29 @@ pub async fn tool_loop(
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<String>();
         let mut handle = spawn_llm(messages.clone(), tools.clone(), tx);
         let mut piper = SentencePiper::new();
+        // channel_open: после закрытия канала ветку recv отключаем — иначе
+        // perpetually-ready ветка старвирует select и задача LLM не исполняется.
+        let mut channel_open = true;
 
         let outcome = loop {
             tokio::select! {
                 biased;
-                maybe = rx.recv() => {
-                    if let Some(chunk) = maybe {
-                        on_delta(&chunk);
-                        for s in piper.push(&chunk) {
-                            on_sentence(&s);
+                maybe = rx.recv(), if channel_open => {
+                    match maybe {
+                        Some(chunk) => {
+                            on_delta(&chunk);
+                            for s in piper.push(&chunk) {
+                                on_sentence(&s);
+                            }
                         }
+                        None => channel_open = false,
                     }
                 }
                 res = &mut handle => {
                     let out = match res {
                         Ok(Ok(o)) => o,
                         Ok(Err(e)) => return Err(e),
-                        Err(join) => return Err(llm::LlmError(format!("задача LИ прервана: {}", join))),
+                        Err(join) => return Err(llm::LlmError(format!("задача LLM прервана: {}", join))),
                     };
                     // Добираем дельты, оставшиеся в канале.
                     while let Some(chunk) = rx.recv().await {
@@ -203,6 +209,7 @@ pub async fn ask(app: &AppHandle, text: &str) {
         });
 
         let mut piper = SentencePiper::new();
+        let mut channel_open = true;
         macro_rules! feed {
             ($chunk:expr) => {{
                 let chunk: String = $chunk;
@@ -218,9 +225,10 @@ pub async fn ask(app: &AppHandle, text: &str) {
         let outcome = loop {
             tokio::select! {
                 biased;
-                maybe = rx.recv() => {
-                    if let Some(chunk) = maybe {
-                        feed!(chunk);
+                maybe = rx.recv(), if channel_open => {
+                    match maybe {
+                        Some(chunk) => feed!(chunk),
+                        None => channel_open = false,
                     }
                 }
                 res = &mut handle => {
@@ -424,7 +432,7 @@ mod tests {
     fn piper_emits_early_sentences() {
         let mut p = SentencePiper::new();
         assert!(p.push("Маркони получил").is_empty());
-        let ready = p.push("премию в 1909 году. Вместе с ");
+        let ready = p.push(" премию в 1909 году. Вместе с ");
         assert_eq!(ready, vec!["Маркони получил премию в 1909 году.".to_string()]);
         let tail = p.flush();
         assert_eq!(tail.join(" "), "Вместе с".to_string());
@@ -435,9 +443,10 @@ mod tests {
     async fn tool_loop_with_mock_llm() {
         let round = std::cell::Cell::new(0usize);
         let mut spawn_llm = move |msgs: Vec<Message>, tools: Vec<ToolSpec>, tx: tokio::sync::mpsc::UnboundedSender<String>| {
-            let round = round.get();
+            let round = round.replace(round.get() + 1); // старое значение = номер текущего раунда
             tokio::spawn(async move {
-                assert_eq!(msgs[0].role, "system");
+                // Тест подаёт историю без системного сообщения.
+                assert_eq!(msgs[0].role, "user");
                 if round == 0 {
                     assert!(tools.iter().any(|t| t.name == "memory_save"));
                     Ok(llm::ChatOutcome {

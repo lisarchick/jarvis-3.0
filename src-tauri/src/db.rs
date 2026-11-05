@@ -13,10 +13,21 @@ pub struct Db(pub Mutex<Connection>);
 impl Db {
     pub fn open() -> Result<Self, String> {
         let path: PathBuf = app_dir().join("jarvis.db");
-        let conn = Connection::open(&path).map_err(|e| e.to_string())?;
+        Self::open_at_inner(&path)
+    }
+
+    /// Тестовый конструктор: уникальный файл → нет contention между тестами.
+    #[cfg(test)]
+    pub fn open_at(path: &std::path::Path) -> Result<Self, String> {
+        Self::open_at_inner(path)
+    }
+
+    fn open_at_inner(path: &std::path::Path) -> Result<Self, String> {
+        let conn = Connection::open(path).map_err(|e| e.to_string())?;
         conn.execute_batch(
             "
             PRAGMA journal_mode = WAL;
+            PRAGMA busy_timeout = 5000;
             CREATE TABLE IF NOT EXISTS chats(
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 title TEXT NOT NULL,
@@ -375,7 +386,8 @@ mod tests {
 
     fn tmp_db() -> Db {
         test_env();
-        Db::open().unwrap()
+        let path = std::env::temp_dir().join(format!("jarvis3-test-{}-{}.db", std::process::id(), crate::util::short_id()));
+        Db::open_at(&path).unwrap()
     }
 
     #[test]

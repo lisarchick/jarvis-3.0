@@ -108,7 +108,7 @@ pub async fn transcribe(wav: &[u8], engine: &str, api_key: &str, base_url: &str,
 pub fn prefer_alternatives(t: &Transcript) -> String {
     for alt in t.alternatives.iter() {
         let low = alt.to_lowercase().replace('ё', "е");
-        if crate::util::WAKE_RE.is_match(&low) || crate::util::STOP_RE.is_match(&low) {
+        if crate::util::has_wake_word(&low) || crate::util::STOP_RE.is_match(&low) {
             return alt.clone();
         }
     }

@@ -484,7 +484,7 @@ pub fn focus_window(hwnd: isize) -> bool {
         use windows::Win32::UI::WindowsAndMessaging::{SetForegroundWindow, ShowWindow, SW_RESTORE, SW_SHOW};
         let hwnd = HWND(hwnd as *mut core::ffi::c_void);
         unsafe {
-            if IsIconicHandle(hwnd) {
+            if is_iconic_handle(hwnd) {
                 let _ = ShowWindow(hwnd, SW_RESTORE);
             } else {
                 let _ = ShowWindow(hwnd, SW_SHOW);
@@ -500,7 +500,7 @@ pub fn focus_window(hwnd: isize) -> bool {
 }
 
 #[cfg(windows)]
-fn IsIconicHandle(hwnd: windows::Win32::Foundation::HWND) -> bool {
+fn is_iconic_handle(hwnd: windows::Win32::Foundation::HWND) -> bool {
     unsafe { windows::Win32::UI::WindowsAndMessaging::IsIconic(hwnd).as_bool() }
 }
 
@@ -629,7 +629,7 @@ pub fn clipboard_set(text: &str) -> bool {
                 return false;
             }
             let _ = EmptyClipboard();
-            let mut wide: Vec<u16> = text.encode_utf16().chain(std::iter::once(0)).collect();
+            let wide: Vec<u16> = text.encode_utf16().chain(std::iter::once(0)).collect();
             let bytes = wide.len() * 2;
             let Ok(hglobal) = GlobalAlloc(GMEM_MOVEABLE, bytes) else {
                 let _ = CloseClipboard();

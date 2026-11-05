@@ -29,7 +29,7 @@ pub struct ScannedApp {
 pub fn scan_all() -> Vec<ScannedApp> {
     let mut out: Vec<ScannedApp> = Vec::new();
     let mut seen = std::collections::HashSet::new();
-    let mut push = |out: &mut Vec<ScannedApp>, seen: &mut std::collections::HashSet<String>, name: String, path: String, kind: &str, is_media: bool| {
+    let push = |out: &mut Vec<ScannedApp>, seen: &mut std::collections::HashSet<String>, name: String, path: String, kind: &str, is_media: bool| {
         let key = name.to_lowercase();
         if key.is_empty() || seen.contains(&key) {
             return;
@@ -171,7 +171,7 @@ fn enumerate_uninstall(
             if RegOpenKeyExW(root, &ch, 0, KEY_READ, &mut ck).is_err() {
                 continue;
             }
-            let mut read = |val: &str| -> Option<String> {
+            let read = |val: &str| -> Option<String> {
                 let vh: HSTRING = val.into();
                 let mut buf = [0u16; 1024];
                 let mut vlen = 2048u32;

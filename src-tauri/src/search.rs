@@ -136,31 +136,35 @@ async fn fetch_page(client: &Client, url: &str) -> Option<String> {
 /// Убирает скрипты/стили/навигацию/рекламу, извлекает основной текст с заголовками.
 pub fn markdown_from_html(html: &str) -> String {
     let mut h: String = html.to_string();
-    // Вырезаем шум.
+    // Вырезаем шум. Rust regex без backreference: парный закрывающий тег
+    // перечисляем той же группой имени через чередование двух веток.
     static NOISE: Lazy<Regex> = Lazy::new(|| {
-        Regex::new(r"(?is)<(script|style|noscript|svg|iframe|form|nav|header|footer|aside)[^>]*>.*?</\1>|<!--.*?-->|<button[^>]*>.*?</button>").unwrap()
+        Regex::new(r"(?is)<(script|style|noscript|svg|iframe|form|nav|header|footer|aside)(\s[^>]*)?>.*?</(script|style|noscript|svg|iframe|form|nav|header|footer|aside)\s*>|<!--.*?-->|<button[^>]*>.*?</button\s*>").unwrap()
     });
     h = NOISE.replace_all(&h, " ").into_owned();
 
     // Основной контент: самый крупный <article>, <main> или <div id/class="content|article|post">
     let main = extract_main(&h).unwrap_or_else(|| h.clone());
 
-    // Блочные теги → переводы строк.
-    static BLOCK: Lazy<Regex> = Lazy::new(|| {
-        Regex::new(r"(?i)</?(p|div|br|li|tr|h[1-6]|section|article|blockquote|pre|table|ul|ol)[^>]*>").unwrap()
-    });
-    let text = BLOCK.replace_all(&main, "\n").into_owned();
-
-    // Заголовки и списки в Markdown.
-    let mut md = String::new();
-    static H_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"(?is)<h([1-6])[^>]*>(.*?)</h\1>").unwrap());
+    // Заголовки → Markdown (до блочной замены, без backreference:
+    // закрывающий тег любого уровня h1–h6).
+    static H_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"(?is)<h([1-6])[^>]*>(.*?)</h[1-6]\s*>").unwrap());
     let text = H_RE
-        .replace_all(&text, |caps: &regex::Captures| {
+        .replace_all(&main, |caps: &regex::Captures| {
             let level = caps[1].parse::<usize>().unwrap_or(2);
             format!("\n{} {}\n", "#".repeat(level.min(4)), strip_tags(&caps[2]))
         })
         .into_owned();
-    static LI_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"(?is)<li[^>]*>(.*?)</li>").unwrap());
+
+    // Блочные теги → переводы строк (заголовки уже обработаны выше).
+    static BLOCK: Lazy<Regex> = Lazy::new(|| {
+        Regex::new(r"(?i)</?(p|div|br|li|tr|section|article|blockquote|pre|table|ul|ol)[^>]*>").unwrap()
+    });
+    let text = BLOCK.replace_all(&text, "\n").into_owned();
+
+    // Списки → Markdown.
+    let mut md = String::new();
+    static LI_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"(?is)<li[^>]*>(.*?)</li\s*>").unwrap());
     let text = LI_RE
         .replace_all(&text, |caps: &regex::Captures| format!("\n- {}", strip_tags(&caps[1])))
         .into_owned();

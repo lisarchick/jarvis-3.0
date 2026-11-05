@@ -91,7 +91,7 @@ jobs:
         run: cargo check --target aarch64-apple-ios --manifest-path src-tauri/Cargo.toml
 
       - name: Init Xcode project
-        run: npx tauri ios init --app-name Jarvis
+        run: npx tauri ios init
 
       - name: Inject iOS usage permissions (Info.plist)
         run: |
@@ -111,7 +111,7 @@ jobs:
         run: |
           mkdir -p release-ios
           VERSION=${GITHUB_REF_NAME#v}
-          APP=$(find src-tauri/gen/apple/build -name "Jarvis.app" -type d | head -1 || true)
+          APP=$(find src-tauri/gen/apple/build -name "*.app" -type d | head -1 || true)
           if [ -n "$APP" ]; then
             cd "$(dirname "$APP")" && zip -qry "$GITHUB_WORKSPACE/release-ios/Jarvis-${VERSION}_iOS_Simulator.app.zip" "$(basename "$APP")" && cd "$GITHUB_WORKSPACE"
           fi

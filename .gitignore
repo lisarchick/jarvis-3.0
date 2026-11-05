@@ -1,0 +1,17 @@
+# Node
+node_modules/
+dist/
+
+# Rust / Tauri
+src-tauri/target/
+src-tauri/gen/schemas/
+
+# Секреты и данные (на всякий случай)
+*.pem
+*.key
+.env
+
+# Служебное
+.DS_Store
+Thumbs.db
+*.log

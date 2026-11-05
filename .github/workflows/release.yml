@@ -95,8 +95,9 @@ jobs:
 
       - name: Inject iOS usage permissions (Info.plist)
         run: |
-          PLIST=src-tauri/gen/apple/Jarvis_iOS/Info.plist
-          if [ -f "$PLIST" ]; then
+          PLIST=$(find src-tauri/gen/apple -maxdepth 3 -path "*_iOS/Info.plist" 2>/dev/null | head -1)
+          echo "plist: $PLIST"
+          if [ -n "$PLIST" ]; then
             /usr/libexec/PlistBuddy -c "Add :NSMicrophoneUsageDescription string Микрофон нужен для голосовых команд JARVIS" "$PLIST" || true
             /usr/libexec/PlistBuddy -c "Add :NSSpeechRecognitionUsageDescription string Распознавание речи для голосовых запросов" "$PLIST" || true
             /usr/libexec/PlistBuddy -c "Print :NSMicrophoneUsageDescription" "$PLIST"
@@ -104,14 +105,14 @@ jobs:
 
       # Симуляторная сборка не требует подписи Apple Developer.
       - name: Build iOS app for simulator
-        run: npx tauri ios build --target aarch64-apple-ios-sim
+        run: npx tauri ios build --target aarch64-sim
 
       - name: Collect iOS artifacts
         shell: bash
         run: |
           mkdir -p release-ios
           VERSION=${GITHUB_REF_NAME#v}
-          APP=$(find src-tauri/gen/apple/build -name "*.app" -type d | head -1 || true)
+          APP=$(find src-tauri/gen/apple -name "*.app" -type d 2>/dev/null | head -1 || true)
           if [ -n "$APP" ]; then
             cd "$(dirname "$APP")" && zip -qry "$GITHUB_WORKSPACE/release-ios/Jarvis-${VERSION}_iOS_Simulator.app.zip" "$(basename "$APP")" && cd "$GITHUB_WORKSPACE"
           fi

@@ -135,7 +135,26 @@ pub enum TtsCommand {
 
 pub static TTX: Lazy<Mutex<Option<tokio::sync::mpsc::UnboundedSender<TtsCommand>>>> = Lazy::new(|| Mutex::new(None));
 
+/// Хэндл приложения для трансляции TTS-команд в webview (iOS: озвучка
+/// через speechSynthesis, т.к. rodio недоступен).
+static APP: Lazy<Mutex<Option<AppHandle>>> = Lazy::new(|| Mutex::new(None));
+
+pub fn set_app(app: AppHandle) {
+    *APP.lock().unwrap() = Some(app);
+}
+
 pub fn tts_send(cmd: TtsCommand) {
+    // В webview всегда: платформы без rodio озвучивают сами.
+    if let Some(app) = APP.lock().unwrap().as_ref() {
+        match &cmd {
+            TtsCommand::Speak { text, .. } => {
+                let _ = app.emit("agent://tts", text);
+            }
+            TtsCommand::Stop => {
+                let _ = app.emit("agent://tts-stop", ());
+            }
+        }
+    }
     if let Some(tx) = TTX.lock().unwrap().as_ref() {
         let _ = tx.send(cmd);
     }

@@ -1,5 +1,8 @@
-//! Оболочка приложения: tray, глобальная клавиша, оверлей, автозапуск,
+//! Оболочка приложения (только desktop): tray, глобальная клавиша, оверлей,
 //! восстановление таймеров после перезапуска.
+
+#![cfg(not(any(target_os = "ios", target_os = "android")))]
+
 
 use tauri::menu::{Menu, MenuItem};
 use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};

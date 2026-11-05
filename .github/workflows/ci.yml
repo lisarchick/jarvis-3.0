@@ -48,3 +48,26 @@ jobs:
 
       - name: Tests
         run: cargo test --manifest-path src-tauri/Cargo.toml --verbose
+
+  ios-check:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Rust toolchain + iOS target
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-ios
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            src-tauri/target
+          key: cargo-${{ runner.os }}-ios-${{ hashFiles('src-tauri/Cargo.lock') }}
+          restore-keys: cargo-${{ runner.os }}-ios-
+
+      - name: Rust check for iOS
+        run: cargo check --target aarch64-apple-ios --manifest-path src-tauri/Cargo.toml

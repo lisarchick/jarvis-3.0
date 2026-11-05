@@ -1,7 +1,7 @@
 [package]
 name = "jarvis3"
-version = "3.0.0"
-description = "JARVIS 3.0 — голосовой ИИ-агент для Windows на Rust/Tauri"
+version = "3.1.0"
+description = "JARVIS 3.1 — голосовой ИИ-агент для Windows и iOS на Rust/Tauri"
 authors = ["Platon Kochanov"]
 license = "MIT"
 edition = "2021"
@@ -16,28 +16,35 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 tauri = { version = "2", features = ["tray-icon", "image-png"] }
-tauri-plugin-single-instance = "2"
-tauri-plugin-autostart = "2"
-tauri-plugin-global-shortcut = "2"
 
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "process", "io-util"] }
 tokio-stream = "0.1"
 futures-util = "0.3"
-reqwest = { version = "0.12", default-features = true, features = ["json", "stream", "gzip", "multipart"] }
+# rustls на всех платформах: чистый Rust TLS — собирается и для iOS
+reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "gzip", "multipart", "rustls-tls"] }
 regex = "1"
 once_cell = "1"
 rand = "0.8"
 chrono = { version = "0.4", features = ["serde"] }
 rusqlite = { version = "0.41", features = ["bundled"] }
-rodio = "0.23"
-tokio-tungstenite = { version = "0.30", features = ["native-tls"] }
+tokio-tungstenite = { version = "0.30", default-features = false, features = ["connect", "handshake", "rustls-tls-webpki-roots"] }
 sha2 = "0.10"
 base64 = "0.22"
 percent-encoding = "2"
+
+# Только desktop: на iOS песочница не даёт хоткеев/автозапуска/трея/скриншотов
+[target.'cfg(not(any(target_os = "ios", target_os = "android")))'.dependencies]
+tauri-plugin-single-instance = "2"
+tauri-plugin-autostart = "2"
+tauri-plugin-global-shortcut = "2"
 xcap = "0.9"
 image = { version = "0.25", default-features = false, features = ["png"] }
+
+# rodio/cpal — вывод звука из Rust (Windows/macOS). На iOS озвучка через webview.
+[target.'cfg(any(windows, target_os = "macos"))'.dependencies]
+rodio = "0.23"
 
 [target."cfg(windows)".dependencies]
 windows = { version = "0.58", features = [

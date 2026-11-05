@@ -139,6 +139,7 @@ pub fn set_mute(mute: bool) -> bool {
 }
 
 /// Тройной сигнал таймера: 1 кГц, генерируем WAV и играем в отдельном потоке.
+#[cfg(any(windows, target_os = "macos"))]
 pub fn beep() {
     std::thread::spawn(|| {
         let wav = tone_wav(1000.0, 0.22, 3, 0.10);
@@ -146,6 +147,10 @@ pub fn beep() {
     });
 }
 
+#[cfg(not(any(windows, target_os = "macos")))]
+pub fn beep() {}
+
+#[cfg(any(windows, target_os = "macos"))]
 /// Простой WAV: моно 16 кГц, `count` гудков частоты `freq` с паузами.
 fn tone_wav(freq: f32, dur_sec: f32, count: u32, gap_sec: f32) -> Vec<u8> {
     let rate = 16000u32;
@@ -291,15 +296,21 @@ fn index_lnk_dir(dir: &PathBuf, map: &mut HashMap<String, String>) {
 }
 
 // ------------------------------------------------------------------ воспроизведение WAV (rodio 0.23: Mixer + Player)
+// Windows/macOS. На iOS звук воспроизводит webview (speechSynthesis).
 
+#[cfg(any(windows, target_os = "macos"))]
 use rodio::buffer::SamplesBuffer;
+#[cfg(any(windows, target_os = "macos"))]
 use rodio::mixer::Mixer;
+#[cfg(any(windows, target_os = "macos"))]
 use rodio::{DeviceSinkBuilder, MixerDeviceSink, Player};
 
-/// Устройство вывода живёт всё время работы приложения.
+#[cfg(any(windows, target_os = "macos"))]
 static AUDIO: Lazy<Mutex<Option<(MixerDeviceSink, Mixer)>>> = Lazy::new(|| Mutex::new(None));
+#[cfg(any(windows, target_os = "macos"))]
 static PLAYER: Lazy<Mutex<Option<std::sync::Arc<Player>>>> = Lazy::new(|| Mutex::new(None));
 
+#[cfg(any(windows, target_os = "macos"))]
 fn ensure_mixer() -> Option<Mixer> {
     let mut guard = AUDIO.lock().unwrap();
     if guard.is_none() {
@@ -318,6 +329,7 @@ fn ensure_mixer() -> Option<Mixer> {
     guard.as_ref().map(|(_, m)| m.clone())
 }
 
+#[cfg(any(windows, target_os = "macos"))]
 /// Играет WAV-байты; блокируется до конца звучания. audio_stop() прерывает.
 pub fn audio_play(wav: &[u8]) {
     let Some(mixer) = ensure_mixer() else { return };
@@ -337,6 +349,7 @@ pub fn audio_play(wav: &[u8]) {
     *PLAYER.lock().unwrap() = None;
 }
 
+#[cfg(any(windows, target_os = "macos"))]
 /// Мгновенная остановка воспроизведения (barge-in).
 pub fn audio_stop() {
     let player = PLAYER.lock().unwrap().clone();
@@ -345,6 +358,7 @@ pub fn audio_stop() {
     }
 }
 
+#[cfg(any(windows, target_os = "macos"))]
 /// WAV (PCM 16-bit) → rodio-источник f32.
 fn wav_to_source(wav: &[u8]) -> Option<SamplesBuffer> {
     if wav.len() < 44 {
@@ -383,6 +397,12 @@ fn wav_to_source(wav: &[u8]) -> Option<SamplesBuffer> {
     let sr = std::num::NonZeroU32::new(rate)?;
     Some(SamplesBuffer::new(ch, sr, samples))
 }
+
+// Стабы для платформ без rodio (iOS): озвучка идёт в webview.
+#[cfg(not(any(windows, target_os = "macos")))]
+pub fn audio_play(_wav: &[u8]) {}
+#[cfg(not(any(windows, target_os = "macos")))]
+pub fn audio_stop() {}
 
 // ------------------------------------------------------------------ окна
 

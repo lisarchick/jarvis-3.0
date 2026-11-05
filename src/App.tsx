@@ -145,6 +145,24 @@ function Main() {
     streamTextRef.current = streamText;
   }, [streamText]);
 
+  // iOS/mobile: озвучка через speechSynthesis webview (на desktop играет Rust).
+  useEffect(() => {
+    const isMobile = /iPhone|iPad|Android/i.test(navigator.userAgent);
+    if (!isMobile || !("speechSynthesis" in window)) return;
+    const speak = (text: string) => {
+      const u = new SpeechSynthesisUtterance(text);
+      u.lang = /[a-z]/i.test(text.slice(0, 60)) && !/[а-яё]/i.test(text.slice(0, 60)) ? "en-US" : "ru-RU";
+      window.speechSynthesis.speak(u);
+    };
+    const unsubs = [
+      listen<string>("agent://tts", (e) => speak(e.payload)),
+      listen("agent://tts-stop", () => window.speechSynthesis.cancel()),
+    ];
+    return () => {
+      unsubs.forEach((u) => u.then((f) => f()));
+    };
+  }, []);
+
   const setFollowWindow = useCallback(() => {
     followUntilRef.current = Date.now() + 8000;
   }, []);

@@ -1,6 +1,8 @@
-//! Съёмка экрана через xcap. Скриншоты делаются только по запросу пользователя
-//! («посмотри на экран»), не сохраняются, передаются в vision-модель и удаляются.
+//! Съёмка экрана через xcap (desktop). Скриншоты делаются только по запросу
+//! пользователя («посмотри на экран»), не сохраняются, передаются в
+//! vision-модель и удаляются. На iOS песочница не даёт снимать чужие приложения.
 
+#[cfg(not(any(target_os = "ios", target_os = "android")))]
 /// Снимает основной монитор → PNG-байты.
 pub async fn capture_png() -> Result<Vec<u8>, String> {
     let monitors = xcap::Monitor::all().map_err(|e| format!("не удалось получить мониторы: {}", e))?;
@@ -15,4 +17,9 @@ pub async fn capture_png() -> Result<Vec<u8>, String> {
         .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
         .map_err(|e| format!("не удалось закодировать PNG: {}", e))?;
     Ok(png)
+}
+
+#[cfg(any(target_os = "ios", target_os = "android"))]
+pub async fn capture_png() -> Result<Vec<u8>, String> {
+    Err("съёмка экрана недоступна на этой платформе".into())
 }

@@ -62,7 +62,8 @@ pub fn save_config(app: AppHandle, state: State<'_, AppState>, mut cfg: Config) 
     }
     crate::config::save(&cfg)?;
     *state.config.write().unwrap() = cfg.clone();
-    // Горячую клавишу пересматриваем на месте.
+    // Горячую клавишу пересматриваем на месте (desktop).
+    #[cfg(not(any(target_os = "ios", target_os = "android")))]
     crate::appshell::rebind_hotkey(&app, &cfg.overlay_hotkey);
     crate::search::cache_clear();
     Ok(())
@@ -270,7 +271,11 @@ pub fn save_note(state: State<'_, AppState>, title: String, body: String) -> Res
 
 #[tauri::command]
 pub fn toggle_overlay(app: AppHandle) {
+    // Оверлей — desktop-режим; на iOS команда безвредна.
+    #[cfg(not(any(target_os = "ios", target_os = "android")))]
     crate::appshell::toggle_overlay(&app);
+    #[cfg(any(target_os = "ios", target_os = "android"))]
+    let _ = &app;
 }
 
 #[tauri::command]

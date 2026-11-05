@@ -105,11 +105,17 @@ pub fn confirm(id: String, approved: bool) {
 }
 
 #[tauri::command]
-pub fn speak_test(text: String, state: State<'_, AppState>) {
+pub fn speak_test(text: String, character: Option<String>, state: State<'_, AppState>) {
     let cfg = state.config.read().unwrap().clone();
-    if cfg.tts_enabled {
-        events::tts_send(TtsCommand::Speak { text, voice: cfg.voice });
+    if !cfg.tts_enabled {
+        return;
     }
+    let mut c = cfg.clone();
+    if let Some(id) = character.as_deref().filter(|s| !s.is_empty()) {
+        c.character_id = id.to_string();
+    }
+    let (v, r, p) = crate::voice::resolve(&c, "neutral");
+    events::tts_send(TtsCommand::Speak { text, voice: v, rate: r, pitch: p });
 }
 
 // ------------------------------------------------------------------ голос: STT и диктофон

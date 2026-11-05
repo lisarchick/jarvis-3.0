@@ -79,6 +79,7 @@ export interface Config {
   keys: Record<string, string>;
   tts_enabled: boolean;
   voice: "female" | "male" | string;
+  character_id: string;
   stt_engine: "google" | "openai" | string;
   mic_device: string;
   commands_enabled: boolean;

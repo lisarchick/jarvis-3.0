@@ -20,6 +20,7 @@ pub mod stt;
 pub mod tools;
 pub mod tts;
 pub mod util;
+pub mod voice;
 
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
@@ -169,9 +170,12 @@ pub fn run() {
                 // Лёгкое приветствие после старта, не мешает.
                 std::thread::spawn(move || {
                     std::thread::sleep(std::time::Duration::from_millis(1500));
+                    let (v, r, p) = voice::resolve(&cfg, "neutral");
                     events::tts_send(events::TtsCommand::Speak {
                         text: greeting.to_string(),
-                        voice: cfg.voice,
+                        voice: v,
+                        rate: r,
+                        pitch: p,
                     });
                 });
             }

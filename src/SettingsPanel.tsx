@@ -4,6 +4,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { CHARACTERS } from "./characters";
 import type { Config, ConnectedModel, Note } from "./types";
 
 const PROVIDERS = [
@@ -294,8 +295,40 @@ export function SettingsPanel({
           )}
 
           {tab === "character" && (
-            <Section title="Персонаж">
+            <Section
+              title="Персонаж"
+              hint="Внешность и голос меняются вместе. «Ядро» — абстрактный риг без лица."
+            >
+              <div className="char-grid">
+                {CHARACTERS.map((c) => (
+                  <button
+                    key={c.id}
+                    className={`char-card ${cfg.character_id === c.id ? "on" : ""}`}
+                    onClick={() => set("character_id", c.id)}
+                    title={c.name}
+                  >
+                    <img src={`characters/${c.id}/preview.png`} alt={c.name} draggable={false} />
+                    <span>{c.name}</span>
+                  </button>
+                ))}
+                <button
+                  className={`char-card ${cfg.character_id === "core" ? "on" : ""}`}
+                  onClick={() => set("character_id", "core")}
+                  title="Ядро"
+                >
+                  <span className="char-core-glyph">◈</span>
+                  <span>Ядро</span>
+                </button>
+              </div>
               <Toggle label="Показывать персонажа" value={cfg.character_enabled} onChange={(v) => set("character_enabled", v)} />
+              <div className="dialog-row">
+                <button
+                  className="btn"
+                  onClick={() => invoke("speak_test", { text: "Привет! Это мой голос. Спроси что-нибудь.", character: cfg.character_id })}
+                >
+                  Прослушать голос персонажа
+                </button>
+              </div>
             </Section>
           )}
 

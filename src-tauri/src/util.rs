@@ -166,17 +166,25 @@ pub fn split_sentences(buffer: &str, early: usize) -> Vec<String> {
         let Some(caps) = SENT_END_RE.captures(&rest) else { break };
         let whole = caps.get(0).unwrap();
         // Если группа пунктуации есть — голова кончается после неё.
-        let head_end = match caps.get(1) {
+        let mut head_end = match caps.get(1) {
             Some(punct) => whole.start() + punct.as_str().len(),
             None => whole.start(),
         };
+        // теги настроения сразу после границы принадлежат этой фразе
+        while let Some(m) = EMO_TAG_RE.find_at(&rest, head_end) {
+            if m.start() != head_end {
+                break;
+            }
+            head_end = m.end();
+        }
         if rest[..head_end].trim().is_empty() {
             // пустая голова (например, \n в начале) — пропускаем разделитель
             rest = rest[whole.end()..].to_string();
             continue;
         }
         let head = rest[..head_end].to_string();
-        rest = rest[whole.end()..].to_string();
+        // хвост продолжаем после тегов, если они были захвачены в голову
+        rest = rest[head_end.max(whole.end())..].to_string();
         push_sentence(&mut out, &head, early);
     }
     if !rest.trim().is_empty() {
@@ -327,6 +335,25 @@ pub fn best_matches(query: &str, apps: Vec<crate::AppEntry>) -> Vec<crate::AppEn
 }
 
 // ------------------------------------------------------------------ id
+
+/// Теги настроения от LLM: «...текст [радость]» → (чистый текст, эмоция).
+pub(crate) static EMO_TAG_RE: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"\s*\[(нейтрально|радость|грусть|злость|удивление)(?::\d(?:\.\d+)?)?\]").unwrap()
+});
+
+/// Теги настроения от LLM: «...текст [радость]» → (чистый текст, эмоция).
+pub fn split_emotion_tag(s: &str) -> (String, &'static str) {
+    if let Some(c) = EMO_TAG_RE.captures(s) {
+        let emo = match &c[1] {
+            "радость" => "happy",
+            "грусть" => "sad",
+            "злость" => "angry",
+            _ => "neutral",
+        };
+        return (EMO_TAG_RE.replace_all(s, "").trim().to_string(), emo);
+    }
+    (s.trim().to_string(), "neutral")
+}
 
 pub fn truncate_chars(s: &str, max: usize) -> String {
     if s.chars().count() <= max {

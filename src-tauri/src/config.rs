@@ -72,8 +72,10 @@ pub struct Config {
 
     // ---- Голос
     pub tts_enabled: bool,
-    /// female (Светлана) | male (Дмитрий)
+    /// female (Светлана) | male (Дмитрий) — фолбэк без персонажа
     pub voice: String,
+    /// Персонаж: aria|sumi|ren|kaito|mika|shizuku|core
+    pub character_id: String,
     /// google (без ключа) | openai (нужен ключ openai)
     pub stt_engine: String,
     /// Устройства: имя из перечисления.
@@ -117,6 +119,7 @@ impl Default for Config {
             keys: BTreeMap::new(),
             tts_enabled: true,
             voice: "female".into(),
+            character_id: "aria".into(),
             stt_engine: "google".into(),
             mic_device: String::new(),
             commands_enabled: true,

@@ -739,3 +739,51 @@ body {
 }
 
 .character-canvas { display: block; }
+
+/* ------------------------------------------------------------------ персонажи */
+
+.char-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+  gap: 10px;
+}
+
+.char-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-panel);
+  cursor: pointer;
+  transition: all 140ms ease;
+  font: inherit;
+  color: var(--text-dim);
+  font-size: 12px;
+}
+.char-card img {
+  width: 84px;
+  height: 84px;
+  object-fit: cover;
+  border-radius: 8px;
+  background: var(--bg-input);
+}
+.char-card:hover { border-color: var(--border-strong); color: var(--text); }
+.char-card.on {
+  border-color: rgba(138, 180, 200, 0.6);
+  color: var(--accent);
+  background: var(--accent-dim);
+}
+.char-core-glyph {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 84px;
+  height: 84px;
+  border-radius: 8px;
+  background: var(--bg-input);
+  color: var(--accent);
+  font-size: 30px;
+}

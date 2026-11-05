@@ -127,8 +127,8 @@ pub fn emit_tool(app: &AppHandle, ev: ToolEvent) {
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "snake_case", tag = "kind")]
 pub enum TtsCommand {
-    /// Синтезировать и поставить в очередь (не ждать).
-    Speak { text: String, voice: String },
+    /// Синтезировать и поставить в очередь (не ждать). rate "+8%", pitch "+8Hz".
+    Speak { text: String, voice: String, rate: String, pitch: String },
     /// Сбросить очередь и остановить воспроизведение (barge-in / стоп).
     Stop,
 }

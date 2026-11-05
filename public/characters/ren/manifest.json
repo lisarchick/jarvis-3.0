@@ -1,0 +1,17 @@
+{
+  "id": "ren",
+  "name": "Рен",
+  "voice": "en-US-AndrewMultilingualNeural",
+  "rate": 0,
+  "pitch": 0,
+  "frames": {
+    "neutral_idle": "frame_neutral_idle.png",
+    "neutral_talk": "frame_neutral_talk.png",
+    "happy_idle": "frame_happy_idle.png",
+    "happy_talk": "frame_happy_talk.png",
+    "sad_idle": "frame_sad_idle.png",
+    "sad_talk": "frame_sad_talk.png",
+    "angry_idle": "frame_angry_idle.png",
+    "angry_talk": "frame_angry_talk.png"
+  }
+}

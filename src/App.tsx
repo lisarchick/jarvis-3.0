@@ -14,6 +14,8 @@ import type {
 } from "./types";
 import { SettingsPanel } from "./SettingsPanel";
 import { Overlay } from "./Overlay";
+import { SpriteCharacter } from "./SpriteCharacter";
+import { stripEmotionTags } from "./characters";
 
 const STATUS_LABEL: Record<string, string> = {
   idle: "Ожидание",
@@ -49,6 +51,7 @@ function Main() {
   const [micDenied, setMicDenied] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [permissionPrompt, setPermissionPrompt] = useState<string | null>(null);
+  const [sentenceEmotion, setSentenceEmotion] = useState<string | null>(null);
   const [onboarded, setOnboarded] = useState(true);
   const [speakLevel, setSpeakLevel] = useState(0);
 
@@ -83,13 +86,16 @@ function Main() {
       listen<AgentStateEvent>("agent://state", (e) => {
         setState(e.payload);
         if (e.payload.status === "speaking") setSpeakLevel(0.4);
-        if (e.payload.status === "idle") setSpeakLevel(0);
+        if (e.payload.status === "idle") {
+          setSpeakLevel(0);
+          setSentenceEmotion(null);
+        }
       }),
       listen<StreamChunk>("agent://delta", (e) => {
         const p = e.payload;
         if (p.kind === "delta") {
           setStreaming(true);
-          setStreamText((prev) => prev + p.text);
+          setStreamText((prev) => prev + stripEmotionTags(p.text));
         } else if (p.kind === "done") {
           setStreaming(false);
           const finalText = streamTextRef.current;
@@ -102,7 +108,7 @@ function Main() {
           setStreaming(false);
           const finalText = streamTextRef.current;
           if (finalText.trim()) setMessages((prev) => [...prev, { role: "assistant", content: finalText }]);
-          setMessages((prev) => [...prev, { role: "assistant", content: p.message }]);
+          setMessages((prev) => [...prev, { role: "assistant", content: stripEmotionTags(p.message) }]);
           setStreamText("");
           setFollowWindow();
         }
@@ -118,6 +124,7 @@ function Main() {
           if (Array.isArray(argsSources)) setSources(argsSources.slice(0, 6));
         }
       }),
+      listen<{ emotion: string }>("agent://sentence", (e) => setSentenceEmotion(e.payload.emotion)),
       listen<Confirmation>("agent://confirm", (e) => setConfirmation(e.payload)),
       listen<string>("agent://permission-needed", (e) => setPermissionPrompt(e.payload)),
       listen<{ name: string }>("agent://timer", (e) => {
@@ -287,12 +294,23 @@ function Main() {
         {/* Левая колонка: персонаж + статус + голос */}
         <aside className="panel character-panel">
           <div className="character-wrap">
-            <CharacterCanvas
-              emotion={state.emotion}
-              speakingLevel={speakLevel}
-              micLevel={micLevel}
-              size={248}
-            />
+            {config && config.character_id && config.character_id !== "core" ? (
+              <SpriteCharacter
+                characterId={config.character_id}
+                emotion={state.emotion}
+                sentenceEmotion={sentenceEmotion}
+                speaking={state.status === "speaking"}
+                speakLevel={speakLevel}
+                size={248}
+              />
+            ) : (
+              <CharacterCanvas
+                emotion={state.emotion}
+                speakingLevel={speakLevel}
+                micLevel={micLevel}
+                size={248}
+              />
+            )}
           </div>
           <div className={`status-line status-${state.status}`}>
             <span className="status-dot" />

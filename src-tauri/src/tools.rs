@@ -769,9 +769,12 @@ async fn fire_timer(app: &AppHandle, id: i64, name: &str) {
     crate::os::beep();
     let cfg = state.config.read().unwrap().clone();
     if cfg.tts_enabled {
+        let (v, r, p) = crate::voice::resolve(&cfg, "happy");
         events::tts_send(events::TtsCommand::Speak {
             text: format!("Таймер «{}» сработал.", name),
-            voice: cfg.voice,
+            voice: v,
+            rate: r,
+            pitch: p,
         });
     }
 }

@@ -6,7 +6,8 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { CharacterCanvas } from "./CharacterCanvas";
-import type { AgentStateEvent, StreamChunk } from "./types";
+import { SpriteCharacter } from "./SpriteCharacter";
+import type { AgentStateEvent, Config, StreamChunk } from "./types";
 
 export function Overlay() {
   const win = useMemo(() => getCurrentWindow(), []);
@@ -14,7 +15,14 @@ export function Overlay() {
   const [lastReply, setLastReply] = useState("");
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
+  const [characterId, setCharacterId] = useState<string>("core");
   const replyRef = useRef("");
+
+  useEffect(() => {
+    invoke<Config>("get_config")
+      .then((c) => setCharacterId(c.character_id || "core"))
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     const unsubs = [
@@ -48,7 +56,18 @@ export function Overlay() {
   return (
     <div className="overlay" data-tauri-drag-region>
       <div className="overlay-side">
-        <CharacterCanvas emotion={state.emotion} speakingLevel={state.status === "speaking" ? 0.4 : 0} micLevel={0} size={108} />
+        {characterId !== "core" ? (
+          <SpriteCharacter
+            characterId={characterId}
+            emotion={state.emotion}
+            sentenceEmotion={null}
+            speaking={state.status === "speaking"}
+            speakLevel={state.status === "speaking" ? 0.4 : 0}
+            size={108}
+          />
+        ) : (
+          <CharacterCanvas emotion={state.emotion} speakingLevel={state.status === "speaking" ? 0.4 : 0} micLevel={0} size={108} />
+        )}
       </div>
       <div className="overlay-main">
         <div className="overlay-status mono">{state.detail || statusLabel(state.status)}</div>

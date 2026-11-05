@@ -17,10 +17,13 @@ const TRUSTED_CLIENT_TOKEN: &str = "6A5AA1D4EAFF4E9FB37E23D68491D6F4";
 const WSS_HOST: &str = "speech.platform.bing.com";
 const CHROMIUM_VERSION: &str = "130.0.2849.68";
 
-pub fn voice_id(voice: &str) -> &'static str {
+pub fn voice_id(voice: &str) -> String {
+    if voice.contains("Neural") {
+        return voice.to_string();
+    }
     match voice {
-        "male" => "ru-RU-DmitryNeural",
-        _ => "ru-RU-SvetlanaNeural",
+        "male" => "ru-RU-DmitryNeural".to_string(),
+        _ => "ru-RU-SvetlanaNeural".to_string(),
     }
 }
 
@@ -42,8 +45,10 @@ fn connection_id() -> String {
 }
 
 /// Синтезирует текст → WAV-байты (24 кГц, моно, 16 бит).
-pub async fn synthesize(text: &str, voice: &str) -> Result<Vec<u8>, String> {
+pub async fn synthesize(text: &str, voice: &str, rate: &str, pitch: &str) -> Result<Vec<u8>, String> {
     let voice = voice_id(voice);
+    let rate = if rate.is_empty() { "+0%" } else { rate };
+    let pitch = if pitch.is_empty() { "+0Hz" } else { pitch };
     let cid = connection_id();
     let url = format!(
         "wss://{}/consumer/speech/synthesize/readaloud/edge/v1?TrustedClientToken={}&Sec-MS-GEC={}&Sec-MS-GEC-Version=1-{}&ConnectionId={}",
@@ -66,10 +71,12 @@ pub async fn synthesize(text: &str, voice: &str) -> Result<Vec<u8>, String> {
 
     // 2. SSML
     let ssml = format!(
-        "X-RequestId:{}\r\nContent-Type:application/ssml+xml\r\nX-Timestamp:{}Z\r\nPath:ssml\r\n\r\n<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xml:lang='ru-RU'><voice name='{}'><prosody pitch='+0Hz' rate='+0%' volume='+0%'>{}</prosody></voice></speak>",
+        "X-RequestId:{}\r\nContent-Type:application/ssml+xml\r\nX-Timestamp:{}Z\r\nPath:ssml\r\n\r\n<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xml:lang='ru-RU'><voice name='{}'><prosody pitch='{}' rate='{}' volume='+0%'>{}</prosody></voice></speak>",
         cid,
         chrono::Utc::now().format("%a %b %d %Y %H:%M:%S GMT+0000"),
         voice,
+        pitch,
+        rate,
         xml_escape(text)
     );
     ws.send(Message::Text(ssml.into())).await.map_err(|e| e.to_string())?;
@@ -123,9 +130,9 @@ pub fn spawn_worker(rx: tokio::sync::mpsc::UnboundedReceiver<TtsCommand>, genera
                     generation.fetch_add(1, Ordering::SeqCst);
                     crate::os::audio_stop();
                 }
-                TtsCommand::Speak { text, voice } => {
+                TtsCommand::Speak { text, voice, rate, pitch } => {
                     let gen_before = generation.load(Ordering::SeqCst);
-                    match rt.block_on(async { synthesize(&text, &voice).await }) {
+                    match rt.block_on(async { synthesize(&text, &voice, &rate, &pitch).await }) {
                         Ok(wav) => {
                             if generation.load(Ordering::SeqCst) == gen_before {
                                 crate::os::audio_play(&wav); // блокируется до конца звучания
